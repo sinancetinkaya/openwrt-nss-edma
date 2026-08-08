@@ -1,3 +1,17 @@
+# About this repo (please read)
+This is a fork of [@JuliusBairaktaris](https://github.com/JuliusBairaktaris) 's [openwrt-nss-edma](https://github.com/JuliusBairaktaris/openwrt-nss-edma) with Zyxel nbg7815 specific patches<br><br>
+
+<font color="red">**WARNING:**</font> Backup your configs first!<br><br>
+In order to increase `/overlay` partition size to 3.4gb, this firmware merges mmcblk0p10 and mmcblk0p11 partitions. When you flash this firmware for the first time, the filesystem has to be expanded to whole partition using `resize2fs`
+```
+apk update && apk add resize2fs
+resize2fs /dev/mmcblk0p10
+```
+
+
+
+---
+## Original README ⏬
 # OpenWrt with Qualcomm NSS hardware offload on the upstream EDMA driver
 
 OpenWrt for **IPQ807x** (Qualcomm IPQ8074 / IPQ8071A) that runs **NSS network
