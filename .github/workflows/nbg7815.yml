@@ -91,6 +91,7 @@ jobs:
           name: ${{ env.RELEASE_TAG }}
           draft: false
           prerelease: false
+          generate_release_notes: true
           files: |
             bin/targets/qualcommax/ipq807x/openwrt-qualcommax-ipq807x-zyxel_nbg7815-initramfs-uImage.itb
             bin/targets/qualcommax/ipq807x/openwrt-qualcommax-ipq807x-zyxel_nbg7815-squashfs-factory.bin
