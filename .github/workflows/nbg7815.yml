@@ -26,11 +26,11 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      - name: Not merged yet PRs for testing
+      - name: Pull Requests
         run: |
-          # ksmbd-tools: update to version 3.5.7 - #30312
-          curl -sL https://github.com/openwrt/packages/commit/762eb13068fa98b736b06ece73a940e7f738e9af.patch -o /tmp/30312.patch
-          git -C feeds/packages apply --3way /tmp/30312.patch
+          ## ksmbd-tools: update to version 3.5.7 - #30312
+          #curl -sL https://github.com/openwrt/packages/commit/762eb13068fa98b736b06ece73a940e7f738e9af.patch -o /tmp/30312.patch
+          #git -C feeds/packages apply --3way /tmp/30312.patch
 
       - name: Load build configuration
         run: |
