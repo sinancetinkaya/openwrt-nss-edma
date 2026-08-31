@@ -69,7 +69,16 @@ jobs:
 
       - name: Compile OpenWrt
         run: |
+          set -o pipefail
           make -j$(nproc) -k IGNORE_ERRORS="n m" world 2>&1 | tee build.log
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-${{ env.RELEASE_TAG }}
+          path: build.log
+          retention-days: 14
 
       - name: Prepare GitHub Pages site directory
         run: |
