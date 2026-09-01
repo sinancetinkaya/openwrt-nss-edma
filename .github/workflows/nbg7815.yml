@@ -72,12 +72,23 @@ jobs:
           set -o pipefail
           make -j$(nproc) -k IGNORE_ERRORS="n m" world 2>&1 | tee build.log
 
+      - name: Capture verbose error for failed packages
+        if: failure()
+        run: |
+          : > verbose-errors.log
+          grep -oP 'ERROR: \Kpackage/\S+(?= failed to build)' build.log | sort -u | while read -r pkg; do
+            echo "===== V=s rebuild: $pkg =====" | tee -a verbose-errors.log
+            make -j1 V=s "$pkg/compile" >> verbose-errors.log 2>&1 || true
+          done
+
       - name: Upload build log on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: build-log-${{ env.RELEASE_TAG }}
-          path: build.log
+          path: |
+            build.log
+            verbose-errors.log
           retention-days: 14
 
       - name: Prepare GitHub Pages site directory
