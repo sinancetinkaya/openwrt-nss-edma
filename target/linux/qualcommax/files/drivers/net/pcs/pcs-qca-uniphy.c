@@ -810,6 +810,12 @@ static int uniphy_link_up_sgmii(struct phylink_pcs *pcs,
 			       UNIPHY_CH_ADP_SW_RSTN);
 }
 
+/* XPCS_USXG_ADPT_RESET is expected to self-clear once the adapter has
+ * re-synced after a speed change; see uniphy_link_up_usxgmii() below.
+ */
+#define XPCS_USXG_ADPT_RESET_POLL_US		10
+#define XPCS_USXG_ADPT_RESET_TIMEOUT_US	5000
+
 static int uniphy_link_up_usxgmii(struct phylink_pcs *pcs, int speed)
 {
 	struct qca_uniphy_pcs *upcs = to_qca_uniphy_pcs(pcs);
@@ -856,8 +862,30 @@ static int uniphy_link_up_usxgmii(struct phylink_pcs *pcs, int speed)
 	if (ret)
 		return ret;
 
-	/* XPCS adapter reset */
-	return regmap_set_bits(uniphy->regmap, XPCS_DIG_CTRL, XPCS_USXG_ADPT_RESET);
+	/* XPCS adapter reset.
+	 *
+	 * XPCS_USXG_ADPT_RESET is expected to self-clear once the
+	 * adapter has re-synced after the speed change above. Poll
+	 * for that instead of assuming it has already happened by
+	 * the time phylink's next pcs_get_state() call samples
+	 * XPCS_KR_STS1 / XPCS_MII_AN_INTR_STS, to avoid reporting a
+	 * stale NO-CARRIER that only clears on a physical replug or
+	 * a full network restart.
+	 */
+	ret = regmap_set_bits(uniphy->regmap, XPCS_DIG_CTRL, XPCS_USXG_ADPT_RESET);
+	if (ret)
+		return ret;
+
+	ret = regmap_read_poll_timeout(uniphy->regmap, XPCS_DIG_CTRL, val,
+					!(val & XPCS_USXG_ADPT_RESET),
+					XPCS_USXG_ADPT_RESET_POLL_US,
+					XPCS_USXG_ADPT_RESET_TIMEOUT_US);
+	if (ret)
+		dev_err(uniphy->dev,
+			"XPCS adapter reset did not clear within %u us\n",
+			XPCS_USXG_ADPT_RESET_TIMEOUT_US);
+
+	return ret;
 }
 
 static void qca_uniphy_pcs_link_up(struct phylink_pcs *pcs,
