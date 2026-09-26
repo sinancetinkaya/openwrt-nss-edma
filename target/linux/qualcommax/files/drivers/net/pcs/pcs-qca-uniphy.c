@@ -13,6 +13,7 @@
 #include <linux/cleanup.h>
 #include <linux/clk/clk-conf.h>
 #include <linux/clk-provider.h>
+#include <linux/debugfs.h>	/* TEMP: local register-access debugfs, not upstream */
 #include <linux/delay.h>
 #include <linux/device.h>
 #include <linux/iopoll.h>
@@ -1093,6 +1094,57 @@ static const struct regmap_config uniphy_regmap_cfg = {
 	.fast_io = true,
 };
 
+/* TEMP: local register-access debugfs, not upstream.
+ *
+ * Usage: echo <hex addr> > .../reg_addr, then cat/echo .../reg_val to
+ * read or write that register live via the driver's own regmap
+ * (correctly dispatches direct vs. indirect XPCS addressing, since
+ * it goes through the same reg_read/reg_write callbacks as everything
+ * else). Avoids both regmap's generic "registers" full-range dump
+ * (which would need max_register set high enough to reach the XPCS
+ * range and would then take ~2M reads to dump in full) and needing
+ * dynamic_debug printk instrumentation for every new register of
+ * interest. Remove once this debugging round is done.
+ */
+static u32 qca_uniphy_dbg_addr;
+
+static int qca_uniphy_dbg_addr_get(void *data, u64 *val)
+{
+	*val = qca_uniphy_dbg_addr;
+	return 0;
+}
+
+static int qca_uniphy_dbg_addr_set(void *data, u64 val)
+{
+	qca_uniphy_dbg_addr = (u32)val;
+	return 0;
+}
+DEFINE_DEBUGFS_ATTRIBUTE(qca_uniphy_dbg_addr_fops, qca_uniphy_dbg_addr_get,
+			  qca_uniphy_dbg_addr_set, "0x%08llx\n");
+
+static int qca_uniphy_dbg_val_get(void *data, u64 *val)
+{
+	struct qca_uniphy *uniphy = data;
+	unsigned int v;
+	int ret;
+
+	ret = regmap_read(uniphy->regmap, qca_uniphy_dbg_addr, &v);
+	if (ret)
+		return ret;
+
+	*val = v;
+	return 0;
+}
+
+static int qca_uniphy_dbg_val_set(void *data, u64 val)
+{
+	struct qca_uniphy *uniphy = data;
+
+	return regmap_write(uniphy->regmap, qca_uniphy_dbg_addr, (unsigned int)val);
+}
+DEFINE_DEBUGFS_ATTRIBUTE(qca_uniphy_dbg_val_fops, qca_uniphy_dbg_val_get,
+			  qca_uniphy_dbg_val_set, "0x%08llx\n");
+
 static int qca_uniphy_probe(struct platform_device *pdev)
 {
 	struct fwnode_pcs_provider *provider;
@@ -1161,6 +1213,18 @@ static int qca_uniphy_probe(struct platform_device *pdev)
 						qca_uniphy_get, uniphy);
 	if (IS_ERR(provider))
 		return dev_err_probe(dev, PTR_ERR(provider), "Failed to add PCS provider\n");
+
+	/* TEMP: local register-access debugfs, not upstream. */
+	if (IS_ENABLED(CONFIG_DEBUG_FS)) {
+		struct dentry *dbgdir = debugfs_create_dir(dev_name(dev), NULL);
+
+		if (!IS_ERR_OR_NULL(dbgdir)) {
+			debugfs_create_file_unsafe("reg_addr", 0600, dbgdir,
+						    uniphy, &qca_uniphy_dbg_addr_fops);
+			debugfs_create_file_unsafe("reg_val", 0600, dbgdir,
+						    uniphy, &qca_uniphy_dbg_val_fops);
+		}
+	}
 
 	return 0;
 }
