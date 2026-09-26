@@ -375,22 +375,6 @@ static void qca_uniphy_pcs_get_state_usxgmii(struct qca_uniphy *uniphy,
 
 	state->an_complete = !!(val & XPCS_USXG_AN_LINK_STS);
 
-	/*
-	 * XPCS_KR_STS1_PLU only means a valid signal is present, not that
-	 * autonegotiation has converged. Reading the speed field before
-	 * an_complete is set can latch whatever's currently sitting in
-	 * the register mid-negotiation -- observed in practice as the
-	 * link briefly reporting 10000 before settling to a link
-	 * partner's real max (e.g. 2500), which phylink/netifd then
-	 * treat as a valid link at the wrong speed and traffic doesn't
-	 * actually pass. Bail out here and let phylink's next poll pick
-	 * up the real, settled value instead.
-	 */
-	if (!state->an_complete) {
-		state->link = false;
-		return;
-	}
-
 	switch (FIELD_GET(XPCS_USXG_AN_SPEED_MASK, val)) {
 	case XPCS_USXG_AN_SPEED_10000:
 		state->speed = SPEED_10000;
