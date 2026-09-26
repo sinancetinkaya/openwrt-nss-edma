@@ -353,6 +353,14 @@ static void qca_uniphy_pcs_get_state_hsgmii(struct qca_uniphy *uniphy,
 static void qca_uniphy_pcs_get_state_usxgmii(struct qca_uniphy *uniphy,
 					     struct phylink_link_state *state)
 {
+	/* TEMPORARY DIAGNOSTIC -- not for upstream. Logs on state change
+	 * only, to capture real register values around a bad-speed
+	 * event without flooding dmesg. Remove once root cause of the
+	 * speed-misreport is confirmed.
+	 */
+	static unsigned int dbg_last_kr, dbg_last_an, dbg_last_ctrl;
+	static bool dbg_last_link, dbg_first = true;
+	unsigned int ctrl_val = 0;
 	unsigned int val;
 	int ret;
 
@@ -364,8 +372,21 @@ static void qca_uniphy_pcs_get_state_usxgmii(struct qca_uniphy *uniphy,
 
 	state->link = !!(val & XPCS_KR_STS1_PLU);
 
-	if (!state->link)
+	regmap_read(uniphy->regmap, XPCS_MII_CTRL, &ctrl_val);
+
+	if (!state->link) {
+		if (dbg_first || dbg_last_link || val != dbg_last_kr ||
+		    ctrl_val != dbg_last_ctrl) {
+			dev_info(uniphy->dev,
+				 "usxgmii diag: link=0 KR_STS1=0x%x MII_CTRL=0x%x AN_EN=%d\n",
+				 val, ctrl_val, !!(ctrl_val & XPCS_MII_AN_EN));
+			dbg_last_kr = val;
+			dbg_last_ctrl = ctrl_val;
+			dbg_last_link = false;
+			dbg_first = false;
+		}
 		return;
+	}
 
 	ret = regmap_read(uniphy->regmap, XPCS_MII_AN_INTR_STS, &val);
 	if (ret) {
@@ -374,6 +395,19 @@ static void qca_uniphy_pcs_get_state_usxgmii(struct qca_uniphy *uniphy,
 	}
 
 	state->an_complete = !!(val & XPCS_USXG_AN_LINK_STS);
+
+	if (dbg_first || !dbg_last_link || val != dbg_last_an ||
+	    ctrl_val != dbg_last_ctrl) {
+		dev_info(uniphy->dev,
+			 "usxgmii diag: link=1 AN_INTR_STS=0x%x an_complete=%d speed_field=%lu MII_CTRL=0x%x AN_EN=%d\n",
+			 val, state->an_complete,
+			 FIELD_GET(XPCS_USXG_AN_SPEED_MASK, val),
+			 ctrl_val, !!(ctrl_val & XPCS_MII_AN_EN));
+		dbg_last_an = val;
+		dbg_last_ctrl = ctrl_val;
+		dbg_last_link = true;
+		dbg_first = false;
+	}
 
 	switch (FIELD_GET(XPCS_USXG_AN_SPEED_MASK, val)) {
 	case XPCS_USXG_AN_SPEED_10000:
