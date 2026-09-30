@@ -7,7 +7,7 @@ RAMFS_COPY_DATA='/etc/fw_env.config /var/lock/fw_printenv.lock'
 # eMMC overlay is on a separate partition; sysupgrade -n does not clear it unless we do it here.
 zyxel_nbg7815_reset_overlay_if_fresh_sysupgrade() {
 	[ "$(board_name)" = "zyxel,nbg7815" ] || return 0
-	[ -z "$UPGRADE_BACKUP" ] || return 0
+	# [ -z "$UPGRADE_BACKUP" ] || return 0
 
 	local ov="/dev/mmcblk0p10"
 	[ -b "$ov" ] || return 0
@@ -22,6 +22,23 @@ zyxel_nbg7815_reset_overlay_if_fresh_sysupgrade() {
 	else
 		dd if=/dev/zero of="$ov" bs=1M count=64 conv=fsync 2>/dev/null || true
 	fi
+}
+
+zyxel_nbg7815_copy_config() {
+	local ov="/dev/mmcblk0p10"
+	local mountpoint="/tmp/nbg7815-overlay"
+
+	[ -b "$ov" ] || return 1
+	mkdir -p "$mountpoint" || return 1
+	mount -t ext4 "$ov" "$mountpoint" || return 1
+
+	cp -f "$UPGRADE_BACKUP" "$mountpoint/$BACKUP_FILE"
+	local result=$?
+	sync
+	umount "$mountpoint"
+	rmdir "$mountpoint"
+
+	return $result
 }
 
 xiaomi_initramfs_prepare() {
@@ -354,10 +371,12 @@ platform_do_upgrade() {
 
 platform_copy_config() {
 	case "$(board_name)" in
+	zyxel,nbg7815)
+		zyxel_nbg7815_copy_config
+		;;
 	prpl,haze|\
 	qnap,301w|\
-	spectrum,sax1v1k|\
-	zyxel,nbg7815)
+	spectrum,sax1v1k)
 		emmc_copy_config
 		;;
 	esac
