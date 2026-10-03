@@ -17,12 +17,18 @@ jobs:
           ref: gh-pages
 
       - name: Remove release directory
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
-          RELEASE_TAG="${{ github.event.release.tag_name }}"
           if [ -d "$RELEASE_TAG" ]; then
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
-            git rm -rf "$RELEASE_TAG"
+            git rm -rf -- "$RELEASE_TAG"
             git commit -m "Cleanup gh-pages directory for deleted release $RELEASE_TAG"
-            git push origin gh-pages
+            for i in 1 2 3 4 5 6; do
+              git pull --rebase origin gh-pages
+              git push origin gh-pages && exit 0
+              sleep $((RANDOM % 5 + 1))
+            done
+            exit 1
           fi
